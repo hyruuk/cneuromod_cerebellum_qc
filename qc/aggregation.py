@@ -194,7 +194,9 @@ def process_run(
     # --- Noise: Motor cortex–cerebellum correlation ---
     if aseg_resampled is not None:
         try:
-            motor_metrics = compute_motor_cereb_correlation(bold_data, aseg_resampled, mask_data)
+            motor_metrics = compute_motor_cereb_correlation(
+                bold_data, aseg_resampled, mask_data, bold_affine=bold_img.affine
+            )
             result.update(motor_metrics)
         except Exception as e:
             warnings.warn(f"[{run_info.subject}/{run_info.session}/{run_info.run}] Motor corr error: {e}")

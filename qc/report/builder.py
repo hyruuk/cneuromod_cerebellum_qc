@@ -36,7 +36,7 @@ from qc.report.figures import (
     make_motor_cereb_corr_bar,
     make_usable_volumes_bar,
 )
-from qc.report.embed import tsnr_slices_to_html
+from qc.report.embed import tsnr_slices_to_html, tsnr_interactive_viewer
 
 
 _HTML_TEMPLATE = """\
@@ -185,7 +185,20 @@ def generate_html_report(
     # -----------------------------------------------------------------------
     s1_parts = []
 
-    # Brain slice mosaics (per subject)
+    # Interactive 3D tSNR viewers (one per subject, nilearn view_img)
+    if tsnr_imgs:
+        viewer_html = ""
+        for subj, tsnr_img in sorted(tsnr_imgs.items()):
+            if tsnr_img is not None:
+                viewer_html += f"<h4>{subj}</h4>"
+                viewer_html += tsnr_interactive_viewer(tsnr_img, subj)
+        if viewer_html:
+            s1_parts.append(_subsection(
+                "tSNR — Interactive 3D Viewer (click to navigate, hover for values)",
+                viewer_html,
+            ))
+
+    # Static axial slice mosaics (overview, cerebellar focus)
     if tsnr_imgs:
         slice_html = ""
         for subj, tsnr_img in sorted(tsnr_imgs.items()):

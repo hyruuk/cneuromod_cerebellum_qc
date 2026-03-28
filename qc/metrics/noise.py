@@ -186,21 +186,53 @@ def compute_ar1(
     return result
 
 
+# MNI coordinates for bilateral primary motor cortex (precentral gyrus peak)
+# Source: Mayka et al., 2006; standard coordinates
+_MOTOR_COORDS_MNI = [(-36, -22, 56), (36, -22, 56)]  # L and R
+_MOTOR_SPHERE_RADIUS_MM = 8.0
+
+
+def _sphere_mask_mni(
+    coords_mni: list,
+    radius_mm: float,
+    shape: tuple,
+    affine: np.ndarray,
+) -> np.ndarray:
+    """Create a boolean mask from bilateral sphere ROIs in MNI space."""
+    affine_inv = np.linalg.inv(affine)
+    vox_sizes = np.abs(np.diag(affine)[:3])
+    mask = np.zeros(shape, dtype=bool)
+    x_g, y_g, z_g = np.mgrid[:shape[0], :shape[1], :shape[2]]
+    for coord in coords_mni:
+        # MNI coordinate → voxel space
+        vc = (affine_inv @ np.array([*coord, 1.0]))[:3]
+        dist_sq = (
+            ((x_g - vc[0]) * vox_sizes[0]) ** 2 +
+            ((y_g - vc[1]) * vox_sizes[1]) ** 2 +
+            ((z_g - vc[2]) * vox_sizes[2]) ** 2
+        )
+        mask |= dist_sq <= radius_mm ** 2
+    return mask
+
+
 def compute_motor_cereb_correlation(
     bold_data: np.ndarray,
     aseg_data: np.ndarray,
     mask_data: Optional[np.ndarray] = None,
+    bold_affine: Optional[np.ndarray] = None,
 ) -> Dict[str, float]:
     """
     Compute baseline Pearson correlation between motor cortex and cerebellar time series.
 
-    Uses precentral gyrus labels from aparcaseg (if present in aseg_data).
-    High r (> 0.5) before denoising suggests shared variance that complicates
-    cerebellar-specific interpretation.
+    Uses sphere ROIs (radius 8mm) around bilateral precentral gyrus peaks in MNI space
+    ([-36,-22,56] and [36,-22,56]) — works with any available segmentation.
+    High r (> 0.5) before denoising suggests shared variance.
 
-    Note: This requires the aparcaseg labels (1024/2024) to be present in the
-    aseg_dseg file. If not, falls back to a small sphere ROI approach using
-    label 17 (Left Hippocampus) as a rough check — or simply returns NaN.
+    Parameters
+    ----------
+    bold_affine:
+        4×4 affine of the BOLD image in MNI space. Required for sphere ROI.
+        If None, falls back to aparcaseg label approach (returns NaN if unavailable).
     """
     result: Dict[str, float] = {
         "motor_cereb_corr": float("nan"),
@@ -209,10 +241,16 @@ def compute_motor_cereb_correlation(
 
     mask_bool = mask_data.astype(bool) if mask_data is not None else np.ones(bold_data.shape[:3], bool)
 
-    # Motor cortex: try aparcaseg precentral labels
-    motor_mask = np.isin(aseg_data, [_ASEG_L_PRECENTRAL, _ASEG_R_PRECENTRAL]) & mask_bool
+    # Build motor cortex mask: prefer sphere ROI (works always in MNI space)
+    if bold_affine is not None:
+        motor_mask = _sphere_mask_mni(
+            _MOTOR_COORDS_MNI, _MOTOR_SPHERE_RADIUS_MM, bold_data.shape[:3], bold_affine
+        ) & mask_bool
+    else:
+        # Fall back to aparcaseg labels (only works if aparcaseg_dseg was loaded)
+        motor_mask = np.isin(aseg_data, [_ASEG_L_PRECENTRAL, _ASEG_R_PRECENTRAL]) & mask_bool
+
     if motor_mask.sum() < 5:
-        # Not available in basic aseg — return NaN gracefully
         return result
 
     motor_ts = bold_data[motor_mask, :].mean(axis=0)

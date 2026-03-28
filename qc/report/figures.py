@@ -31,6 +31,13 @@ def subject_color(subject: str) -> str:
     return SUBJECT_COLORS.get(subject, _DEFAULT_COLOR)
 
 
+def _hex_to_rgba(hex_color: str, alpha: float = 0.15) -> str:
+    """Convert '#RRGGBB' to 'rgba(R,G,B,alpha)'. Plotly rejects 8-char hex."""
+    h = hex_color.lstrip("#")
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    return f"rgba({r},{g},{b},{alpha})"
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -90,7 +97,7 @@ def make_summary_table(df_subjects: pd.DataFrame, df_runs: pd.DataFrame) -> go.F
             cells=dict(
                 values=[tbl[c] for c in tbl.columns],
                 fill_color=[
-                    [subject_color(s) + "33" for s in subjects]
+                    [_hex_to_rgba(subject_color(s)) for s in subjects]
                     for _ in tbl.columns
                 ],
                 font=dict(color="#2d3436", size=12),

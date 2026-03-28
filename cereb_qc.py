@@ -60,12 +60,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--output_dir",
-        default=None,
+        default="output",
         help="Directory where the HTML report will be written. Required unless --dry_run.",
     )
     parser.add_argument(
         "--suit_atlas",
-        required=True,
+        default="data/suit_atl-Anatom_space-MNI_dseg.nii.gz",
         help=(
             "Path to the SUIT cerebellar lobular atlas NIfTI file (discrete integer labels, "
             "in MNI152 space). Run download_suit_atlas.py to obtain this file."
@@ -151,8 +151,10 @@ def main() -> None:
             "Tip: use --no_bold to run in confounds-only mode without the atlas."
         )
 
-    if not args.dry_run and args.output_dir is None:
-        sys.exit("ERROR: --output_dir is required unless --dry_run is specified.")
+    # output_dir has a default ("output"), so this guard is only for the edge case
+    # where the user explicitly passes empty string
+    if not args.dry_run and not args.output_dir:
+        sys.exit("ERROR: --output_dir cannot be empty.")
 
     output_dir = Path(args.output_dir) if args.output_dir else None
 

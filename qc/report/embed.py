@@ -90,6 +90,61 @@ def tsnr_slices_to_html(
         return f'<p style="color:orange;">[tSNR image unavailable: {e}]</p>'
 
 
+def tsnr_interactive_viewer(
+    tsnr_img: nib.Nifti1Image,
+    subject: str,
+    threshold: float = 5.0,
+    width: str = "100%",
+    height: str = "500px",
+) -> str:
+    """
+    Generate a nilearn interactive 3D viewer for the tSNR map.
+
+    Returns an <iframe> tag with the self-contained viewer embedded via srcdoc.
+    The viewer shows an interactive volume with clickable orthogonal views
+    (axial/sagittal/coronal) + a 3D glass-brain perspective.
+
+    Parameters
+    ----------
+    tsnr_img:
+        3D NIfTI tSNR map.
+    subject:
+        Subject label for the figure title.
+    threshold:
+        Minimum tSNR value to display (lower values are transparent).
+        Good default: 5.0 (suppresses background noise).
+    width / height:
+        CSS dimensions for the iframe.
+    """
+    try:
+        from nilearn import plotting as nlplot
+
+        tsnr_data = tsnr_img.get_fdata()
+        valid = tsnr_data[np.isfinite(tsnr_data) & (tsnr_data > 0)]
+        vmax = float(np.percentile(valid, 97)) if len(valid) > 0 else 100.0
+
+        try:
+            from nilearn.datasets import load_mni152_template
+            bg_img = load_mni152_template(resolution=2)
+        except Exception:
+            bg_img = None
+
+        view = nlplot.view_img(
+            tsnr_img,
+            bg_img=bg_img,
+            threshold=threshold,
+            vmax=vmax,
+            title=f"{subject} — tSNR (interactive)",
+            colorbar=True,
+            cmap="hot",
+            symmetric_cmap=False,
+        )
+        # get_iframe() returns a self-contained <iframe> element
+        return view.get_iframe(width=width, height=height)
+    except Exception as e:
+        return f'<p style="color:orange;">[Interactive viewer unavailable: {e}]</p>'
+
+
 def array_to_base64_png(
     arr: np.ndarray,
     cmap: str = "RdBu_r",
