@@ -351,12 +351,27 @@ def main() -> None:
             usable_str = f"{usable:.1f}%" if np.isfinite(usable) else "N/A"
             print(f"    {subj}: cereb tSNR={tsnr_str}, mean FD={fd_str}, usable={usable_str}")
 
-    # Collect representative tSNR images (one per subject)
-    tsnr_imgs: Dict[str, object] = {}
+    # Average tSNR maps across all runs per subject
+    print("\n  Averaging tSNR maps across runs per subject...")
+    _tsnr_stacks: Dict[str, list] = {}
+    _tsnr_ref_img: Dict[str, object] = {}
     for r in run_results:
         subj = r["subject"]
-        if subj not in tsnr_imgs and r.get("_tsnr_img") is not None:
-            tsnr_imgs[subj] = r["_tsnr_img"]
+        img = r.get("_tsnr_img")
+        if img is None:
+            continue
+        if subj not in _tsnr_stacks:
+            _tsnr_stacks[subj] = []
+            _tsnr_ref_img[subj] = img
+        _tsnr_stacks[subj].append(img.get_fdata(dtype=np.float32))
+
+    tsnr_imgs: Dict[str, object] = {}
+    for subj, arrays in _tsnr_stacks.items():
+        n = len(arrays)
+        stack = np.stack(arrays, axis=-1)  # (x, y, z, n_runs)
+        mean_tsnr = np.nanmean(stack, axis=-1).astype(np.float32)
+        tsnr_imgs[subj] = nib.Nifti1Image(mean_tsnr, _tsnr_ref_img[subj].affine)
+        print(f"    {subj}: averaged {n} tSNR maps")
 
     # Save aggregated DataFrames as CSV for further analysis
     output_dir.mkdir(parents=True, exist_ok=True)

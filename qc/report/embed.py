@@ -123,6 +123,11 @@ def tsnr_interactive_viewer(
         valid = tsnr_data[np.isfinite(tsnr_data) & (tsnr_data > 0)]
         vmax = float(np.percentile(valid, 97)) if len(valid) > 0 else 100.0
 
+        # Replace NaN with 0 so nilearn does not emit "Non-finite values detected".
+        # Zeros fall below threshold and are rendered transparent.
+        clean_data = np.where(np.isfinite(tsnr_data), tsnr_data, 0.0).astype(np.float32)
+        clean_img = nib.Nifti1Image(clean_data, tsnr_img.affine)
+
         try:
             from nilearn.datasets import load_mni152_template
             bg_img = load_mni152_template(resolution=2)
@@ -130,7 +135,7 @@ def tsnr_interactive_viewer(
             bg_img = None
 
         view = nlplot.view_img(
-            tsnr_img,
+            clean_img,
             bg_img=bg_img,
             threshold=threshold,
             vmax=vmax,
