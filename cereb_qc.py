@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-CNeuroMod Mario Dataset — Cerebellar QC Report Generator
+CNeuroMod — Cerebellar QC Report Generator
 
 Generates a single interactive HTML QC report for all subjects,
 covering tSNR, motion, brain mask coverage, physiological noise,
@@ -9,26 +9,26 @@ and advanced metrics relevant to cerebellar analysis during gameplay.
 Usage:
     # Full mode (requires BOLD files fetched via datalad):
     python cereb_qc.py \\
-        --fmriprep_dir /path/to/mario.fmriprep \\
+        --fmriprep_dir /path/to/{dataset}.fmriprep \\
         --output_dir /path/to/output \\
         --suit_atlas /path/to/suit_atlas.nii.gz
 
     # Fast confounds-only mode (no BOLD needed):
     python cereb_qc.py \\
-        --fmriprep_dir /path/to/mario.fmriprep \\
+        --fmriprep_dir /path/to/{dataset}.fmriprep \\
         --output_dir /path/to/output \\
         --suit_atlas /path/to/suit_atlas.nii.gz \\
         --no_bold
 
     # Dry run (check file availability only):
     python cereb_qc.py \\
-        --fmriprep_dir /path/to/mario.fmriprep \\
+        --fmriprep_dir /path/to/{dataset}.fmriprep \\
         --suit_atlas /path/to/suit_atlas.nii.gz \\
         --dry_run
 
     # Single subject, specific sessions:
     python cereb_qc.py \\
-        --fmriprep_dir /path/to/mario.fmriprep \\
+        --fmriprep_dir /path/to/{dataset}.fmriprep \\
         --output_dir /path/to/output \\
         --suit_atlas /path/to/suit_atlas.nii.gz \\
         --subjects sub-01 \\
@@ -50,13 +50,13 @@ import numpy as np
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Generate cerebellar QC report for mario.fmriprep dataset.",
+        description="Generate cerebellar QC report for an fmriprep dataset.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
         "--fmriprep_dir",
         required=True,
-        help="Root directory of the mario.fmriprep dataset.",
+        help="Root directory of the fmriprep dataset.",
     )
     parser.add_argument(
         "--output_dir",

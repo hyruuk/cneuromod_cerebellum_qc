@@ -45,7 +45,7 @@ _HTML_TEMPLATE = """\
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>CNeuromod Mario — Cerebellar QC Report</title>
+  <title>CNeuromod — Cerebellar QC Report</title>
   <style>
     body {{
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -85,7 +85,7 @@ _HTML_TEMPLATE = """\
   </style>
 </head>
 <body>
-  <h1>CNeuroMod Mario Dataset — Cerebellar QC Report</h1>
+  <h1>CNeuroMod — Cerebellar QC Report</h1>
   <p class="meta">
     Generated: {timestamp} &nbsp;|&nbsp;
     fMRIPrep 20.2.5 &nbsp;|&nbsp;

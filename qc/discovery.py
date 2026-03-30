@@ -1,5 +1,5 @@
 """
-BIDS-like file discovery for mario.fmriprep dataset.
+BIDS-like file discovery for fmriprep datasets.
 
 Discovers all subjects/sessions/runs and checks datalad/git-annex availability
 by resolving symlinks.
@@ -76,7 +76,7 @@ def discover_runs(
     Parameters
     ----------
     fmriprep_dir:
-        Root of the mario.fmriprep dataset.
+        Root of the fmriprep dataset.
     subjects:
         Optional list of subject IDs to restrict to (e.g. ['sub-01', 'sub-02']).
         If None, all subjects are discovered.
@@ -107,16 +107,19 @@ def discover_runs(
             if not func_dir.is_dir():
                 continue
 
-            # Find all runs by looking for confounds JSON files (always present)
-            run_keys = set()
-            for f in func_dir.glob(f"{subject}_{session}_task-mario_run-*_desc-confounds_timeseries.json"):
-                m = re.search(r"run-(\d+)", f.name)
-                if m:
-                    run_keys.add(m.group(1))
+            # Find all runs by looking for confounds JSON files (always present).
+            # Extract task label from filename to stay dataset-agnostic.
+            run_tasks: dict = {}  # run_id -> task label
+            for f in func_dir.glob(f"{subject}_{session}_task-*_run-*_desc-confounds_timeseries.json"):
+                m_run = re.search(r"run-(\d+)", f.name)
+                m_task = re.search(r"task-([^_]+)", f.name)
+                if m_run and m_task:
+                    run_tasks[m_run.group(1)] = m_task.group(1)
 
-            for run_id in sorted(run_keys):
+            for run_id in sorted(run_tasks):
+                task_label = run_tasks[run_id]
                 run_label = f"run-{run_id}"
-                prefix = f"{subject}_{session}_task-mario_{run_label}"
+                prefix = f"{subject}_{session}_task-{task_label}_{run_label}"
 
                 bold_path = func_dir / f"{prefix}_space-{space}_desc-preproc_bold.nii.gz"
                 confounds_path = func_dir / f"{prefix}_desc-confounds_timeseries.tsv"
@@ -178,7 +181,7 @@ def check_availability(runs: List[RunInfo]) -> pd.DataFrame:
 def print_availability_report(runs: List[RunInfo]) -> None:
     """Print a human-readable availability table."""
     df = check_availability(runs)
-    print("\nCNeuromod Mario fMRIPrep Cerebellar QC — File Availability")
+    print("\nCNeuromod fMRIPrep Cerebellar QC — File Availability")
     print("=" * 65)
 
     cols = ["bold", "confounds", "aseg", "mask", "boldref"]

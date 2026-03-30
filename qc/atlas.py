@@ -168,13 +168,10 @@ def load_subject_aseg(
     aseg_img:
         nibabel image (for use as reference grid), or None if unavailable.
     """
-    # Try run-1, run-2, run-3, run-4 in order
-    for run_id in ["1", "2", "3", "4"]:
-        candidate = (
-            func_dir
-            / f"{subject}_{session}_task-mario_run-{run_id}"
-            f"_space-{space}_desc-aseg_dseg.nii.gz"
-        )
+    # Find any available aseg file for this subject/session (task/run-agnostic)
+    for candidate in sorted(func_dir.glob(
+        f"{subject}_{session}_task-*_run-*_space-{space}_desc-aseg_dseg.nii.gz"
+    )):
         if _is_available(candidate):
             img = nib.load(candidate)
             data = np.asarray(img.dataobj, dtype=np.int32)
