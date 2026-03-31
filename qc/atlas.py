@@ -287,6 +287,9 @@ def load_yeo_atlas(
     yeo_img = nib.load(atlas_path)
     resampled = resample_to_img(yeo_img, reference_img, interpolation="nearest", copy_header=True)
     yeo_data = np.asarray(resampled.dataobj, dtype=np.int16)
+    # Some NIfTI headers set dim[4]=1, causing a spurious 4th dimension
+    if yeo_data.ndim == 4 and yeo_data.shape[3] == 1:
+        yeo_data = yeo_data[..., 0]
     return yeo_data, YEO7_LABEL_MAP
 
 

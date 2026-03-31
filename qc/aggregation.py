@@ -326,7 +326,11 @@ def _resample_atlas_to_bold(
 
     bold_ref = nib.Nifti1Image(np.zeros(bold_shape), bold_img.affine)
     resampled = _resample(atlas_nib, bold_ref, interpolation="nearest")
-    return np.asarray(resampled.dataobj, dtype=atlas_data.dtype)
+    result = np.asarray(resampled.dataobj, dtype=atlas_data.dtype)
+    # Squeeze spurious trailing dim (NIfTI dim[4]=1 artefact)
+    if result.ndim == 4 and result.shape[3] == 1:
+        result = result[..., 0]
+    return result
 
 
 def identify_representative_runs(
