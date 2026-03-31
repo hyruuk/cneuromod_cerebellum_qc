@@ -564,18 +564,16 @@ def make_acompcor_variance_curve(df_runs: pd.DataFrame) -> go.Figure:
 
     for col_idx, mask_type in enumerate(mask_types, start=1):
         col_50 = f"acompcor_{mask_type}_n_for_50pct"
-        col_80 = f"acompcor_{mask_type}_n_for_80pct"
         col_n = f"acompcor_{mask_type}_n_retained"
 
         for subj in subjects:
             subj_df = df_runs[df_runs["subject"] == subj]
             val_50 = float(subj_df[col_50].mean(skipna=True)) if col_50 in subj_df.columns else float("nan")
-            val_80 = float(subj_df[col_80].mean(skipna=True)) if col_80 in subj_df.columns else float("nan")
             val_n = float(subj_df[col_n].mean(skipna=True)) if col_n in subj_df.columns else float("nan")
 
             fig.add_trace(
                 go.Bar(
-                    name=f"{subj} (50%)" if col_idx == 1 else subj,
+                    name=subj,
                     x=[subj],
                     y=[val_50],
                     marker_color=subject_color(subj),
@@ -585,21 +583,10 @@ def make_acompcor_variance_curve(df_runs: pd.DataFrame) -> go.Figure:
                 ),
                 row=1, col=col_idx,
             )
-            fig.add_trace(
-                go.Scatter(
-                    x=[subj], y=[val_80],
-                    mode="markers",
-                    marker=dict(symbol="diamond", size=10, color=subject_color(subj), line=dict(width=1, color="black")),
-                    name=f"{subj} (80%)" if col_idx == 1 else subj,
-                    showlegend=False,
-                    hovertemplate=f"{subj} {mask_type}: n_for_80pct=%{{y:.0f}}<extra></extra>",
-                ),
-                row=1, col=col_idx,
-            )
 
     fig.update_yaxes(title_text="N components", row=1, col=1)
     fig.update_layout(
-        title=_fig_title("aCompCor: Components needed to reach 50% (bar) and 80% (diamond) variance"),
+        title=_fig_title("aCompCor: Components needed to reach 50% cumulative variance"),
         height=400,
         barmode="group",
     )
@@ -784,64 +771,72 @@ def make_motor_cereb_corr_bar(df_runs: pd.DataFrame) -> go.Figure:
 YEO7_NAMES = ["Visual", "Somatomotor", "DorsAttn", "SalVentAttn", "Limbic", "Control", "Default"]
 
 
-def make_yeo_cereb_scatter(df_sessions: pd.DataFrame) -> go.Figure:
+def make_yeo_cereb_boxplot(df_sessions: pd.DataFrame) -> go.Figure:
     """
-    7-panel scatter: Yeo network tSNR (x) vs whole-cerebellum tSNR (y),
-    one dot per session, coloured by subject.
+    Per-subject box plots: tSNR distribution across sessions for each Yeo network
+    and whole-cerebellum GM. One subplot per subject, shared y-axis across subjects.
 
-    Each panel = one Yeo network. Shared y-axis so cerebellar tSNR is comparable
-    across networks. Reveals which cortical networks co-vary with cerebellar quality
-    across sessions.
+    Each box = distribution of session-level tSNR values for that region/subject.
+    Cerebellum is shown alongside Yeo networks for direct comparison.
     """
     yeo_cols = [f"yeo_{n}" for n in YEO7_NAMES]
-    available = [n for n, c in zip(YEO7_NAMES, yeo_cols) if c in df_sessions.columns]
-
-    if not available:
-        fig = go.Figure()
-        fig.update_layout(title=_fig_title("Yeo–Cerebellum tSNR Scatter (no Yeo data)"), height=300)
-        return fig
-
-    fig = make_subplots(
-        rows=1,
-        cols=len(available),
-        subplot_titles=available,
-        shared_yaxes=True,
-    )
+    cereb_col = "cereb_gm_mean" if "cereb_gm_mean" in df_sessions.columns else "cereb_mean"
+    metric_cols = yeo_cols + [cereb_col]
+    categories = YEO7_NAMES + ["Cerebellum"]
 
     subjects = sorted(df_sessions["subject"].unique())
-    cereb_col = "cereb_gm_mean" if "cereb_gm_mean" in df_sessions.columns else "cereb_mean"
 
-    for col_idx, network in enumerate(available, start=1):
-        yeo_col = f"yeo_{network}"
-        for subj in subjects:
-            sdf = df_sessions[df_sessions["subject"] == subj].dropna(subset=[yeo_col, cereb_col])
-            if sdf.empty:
+    available_cols = [c for c in metric_cols if c in df_sessions.columns]
+    if not available_cols:
+        fig = go.Figure()
+        fig.update_layout(title=_fig_title("Yeo–Cerebellum tSNR (no Yeo data)"), height=300)
+        return fig
+
+    # Global y range (shared across all subjects)
+    all_vals = df_sessions[available_cols].values.ravel()
+    all_vals = all_vals[np.isfinite(all_vals)]
+    y_min = float(np.percentile(all_vals, 1)) * 0.95
+    y_max = float(np.percentile(all_vals, 99)) * 1.05
+
+    fig = make_subplots(rows=1, cols=len(subjects), subplot_titles=subjects, shared_yaxes=True)
+
+    for col_idx, subj in enumerate(subjects, start=1):
+        sdf = df_sessions[df_sessions["subject"] == subj]
+        color = subject_color(subj)
+
+        for col, label in zip(metric_cols, categories):
+            if col not in sdf.columns:
+                continue
+            vals = sdf[col].dropna().values
+            if len(vals) == 0:
                 continue
             fig.add_trace(
-                go.Scatter(
-                    x=sdf[yeo_col].tolist(),
-                    y=sdf[cereb_col].tolist(),
-                    mode="markers",
-                    name=subj,
-                    showlegend=(col_idx == 1),
-                    marker=dict(color=subject_color(subj), size=7, opacity=0.8,
-                                line=dict(width=0.5, color="white")),
-                    hovertemplate=(
-                        f"{subj}<br>{network} tSNR: %{{x:.1f}}<br>"
-                        f"Cereb tSNR: %{{y:.1f}}<extra></extra>"
-                    ),
+                go.Box(
+                    y=vals,
+                    x=[label] * len(vals),
+                    name=label,
+                    marker_color=color,
+                    line_color=color,
+                    fillcolor=_hex_to_rgba(color, 0.4),
+                    boxpoints="all",
+                    jitter=0.35,
+                    pointpos=0,
+                    showlegend=False,
+                    hovertemplate=f"{subj} {label}: %{{y:.1f}}<extra></extra>",
                 ),
                 row=1, col=col_idx,
             )
-        if col_idx == 1:
-            fig.update_yaxes(title_text="Cerebellar GM tSNR", row=1, col=1)
-        fig.update_xaxes(title_text="tSNR", row=1, col=col_idx)
 
+        fig.update_xaxes(tickangle=-45, row=1, col=col_idx)
+        if col_idx == 1:
+            fig.update_yaxes(title_text="tSNR", row=1, col=1)
+
+    fig.update_yaxes(range=[y_min, y_max])
     fig.update_layout(
-        title=_fig_title("Cortex–Cerebellum tSNR: Yeo Network vs Cerebellar GM (session-level dots)"),
-        height=380,
-        legend_title="Subject",
-        margin=dict(t=80),
+        title=_fig_title("Yeo Network + Cerebellum tSNR Distribution per Subject (session-level)"),
+        height=480,
+        showlegend=False,
+        margin=dict(b=120),
     )
     return fig
 
@@ -893,20 +888,21 @@ def make_yeo_lobule_corr_matrix(
     for col_idx, subj in enumerate(eligible, start=1):
         sdf = df_sessions[df_sessions["subject"] == subj]
 
-        # Build matrices: (n_sessions, n_networks) and (n_sessions, n_lobules)
-        yeo_avail = [c for c in yeo_cols if c in sdf.columns]
-        suit_avail = [c for c in suit_cols if c in sdf.columns]
+        # Only keep columns with enough valid (non-NaN) sessions
+        # This automatically excludes deep nuclei and other empty regions
+        yeo_avail = [c for c in yeo_cols if c in sdf.columns and sdf[c].notna().sum() >= min_sessions]
+        suit_avail = [c for c in suit_cols if c in sdf.columns and sdf[c].notna().sum() >= min_sessions]
 
-        yeo_mat = sdf[yeo_avail].values.astype(float)   # (n_ses, n_yeo)
-        suit_mat = sdf[suit_avail].values.astype(float)  # (n_ses, n_lobules)
-
-        # Drop rows where any column is NaN (correlation needs complete pairs)
-        valid_rows = np.isfinite(yeo_mat).all(axis=1) & np.isfinite(suit_mat).all(axis=1)
-        if valid_rows.sum() < min_sessions:
+        if not yeo_avail or not suit_avail:
             continue
 
-        yeo_mat = yeo_mat[valid_rows]
-        suit_mat = suit_mat[valid_rows]
+        # Use complete rows across the retained columns
+        combined = sdf[yeo_avail + suit_avail].dropna()
+        if len(combined) < min_sessions:
+            continue
+
+        yeo_mat = combined[yeo_avail].values.astype(float)
+        suit_mat = combined[suit_avail].values.astype(float)
 
         # Compute cross-correlation: combine → full corrcoef → take cross block
         combined = np.hstack([yeo_mat, suit_mat])       # (n_ses, n_yeo + n_lobules)

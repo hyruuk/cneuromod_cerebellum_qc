@@ -35,7 +35,7 @@ from qc.report.figures import (
     make_signal_drift_scatter,
     make_motor_cereb_corr_bar,
     make_usable_volumes_bar,
-    make_yeo_cereb_scatter,
+    make_yeo_cereb_boxplot,
     make_yeo_lobule_corr_matrix,
 )
 from qc.report.embed import tsnr_slices_to_html, tsnr_interactive_viewer, atlas_interactive_viewer
@@ -433,7 +433,7 @@ def generate_html_report(
     if not df_sessions.empty:
         s7_parts.append(_subsection(
             "Yeo Network vs Whole-Cerebellum tSNR (session-level dots)",
-            _safe_fig(make_yeo_cereb_scatter, df_sessions),
+            _safe_fig(make_yeo_cereb_boxplot, df_sessions),
         ))
         s7_parts.append(_subsection(
             "Yeo Network × SUIT Lobule tSNR Correlation Matrix (per subject, across sessions)",
