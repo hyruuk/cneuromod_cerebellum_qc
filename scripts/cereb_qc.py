@@ -37,6 +37,10 @@ Usage:
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 import argparse
 import os
 import sys
@@ -162,6 +166,8 @@ def main() -> None:
         dataset_name = dataset_name[: -len(".fmriprep")]
 
     output_dir = Path(args.output_dir) / dataset_name if not args.dry_run else None
+    if output_dir is not None:
+        output_dir.mkdir(parents=True, exist_ok=True)
 
     # -----------------------------------------------------------------------
     # Step 1: Discover runs
@@ -380,7 +386,6 @@ def main() -> None:
         print(f"    {subj}: averaged {n} tSNR maps")
 
     # Save aggregated DataFrames as CSV for further analysis
-    output_dir.mkdir(parents=True, exist_ok=True)
     dfs["runs"].to_csv(output_dir / "qc_runs.csv", index=False)
     dfs["sessions"].to_csv(output_dir / "qc_sessions.csv", index=False)
     dfs["subjects"].to_csv(output_dir / "qc_subjects.csv", index=False)

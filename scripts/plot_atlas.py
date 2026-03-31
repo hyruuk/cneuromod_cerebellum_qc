@@ -13,6 +13,10 @@ Usage:
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 import argparse
 import csv
 from pathlib import Path
@@ -130,7 +134,7 @@ def main():
         cmap=cmap,
         vmin=0,
         vmax=len(entries),
-        transparency=0.85,
+        transparency=0.15,
     )
     ax_axial.set_title("Axial", color="white", fontsize=11, pad=4)
 
@@ -151,7 +155,7 @@ def main():
         cmap=cmap,
         vmin=0,
         vmax=len(entries),
-        transparency=0.85,
+        transparency=0.15,
     )
     ax_cor.set_title("Coronal  (y = −60 mm)", color="white", fontsize=11, pad=4)
 
@@ -172,7 +176,7 @@ def main():
         cmap=cmap,
         vmin=0,
         vmax=len(entries),
-        transparency=0.85,
+        transparency=0.15,
     )
     ax_sag.set_title("Sagittal  (x = 0 mm, vermis)", color="white", fontsize=11, pad=4)
 

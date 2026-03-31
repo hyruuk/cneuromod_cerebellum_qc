@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "cneuromod-cerebellum-qc"
+version = "0.1.0"
+description = "Cerebellar QC pipeline for fMRIPrep-preprocessed datasets"
+requires-python = ">=3.10"
+dependencies = [
+    "nibabel>=5.0.0",
+    "nilearn>=0.12.0",
+    "numpy>=1.26.0",
+    "scipy>=1.13.0",
+    "pandas>=2.0.0",
+    "plotly>=5.0.0",
+    "matplotlib>=3.7.0",
+    "joblib>=1.3.0",
+    "requests>=2.28.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-cov"]
+
+[project.scripts]
+cereb-qc            = "scripts.cereb_qc:main"
+download-suit-atlas = "scripts.download_suit_atlas:main"
+plot-atlas          = "scripts.plot_atlas:main"
+
+[tool.setuptools.packages.find]
+include = ["qc*", "scripts*"]
