@@ -130,7 +130,7 @@ def main():
         cmap=cmap,
         vmin=0,
         vmax=len(entries),
-        transparency=0.15,
+        transparency=0.85,
     )
     ax_axial.set_title("Axial", color="white", fontsize=11, pad=4)
 
@@ -151,7 +151,7 @@ def main():
         cmap=cmap,
         vmin=0,
         vmax=len(entries),
-        transparency=0.15,
+        transparency=0.85,
     )
     ax_cor.set_title("Coronal  (y = −60 mm)", color="white", fontsize=11, pad=4)
 
@@ -172,7 +172,7 @@ def main():
         cmap=cmap,
         vmin=0,
         vmax=len(entries),
-        transparency=0.15,
+        transparency=0.85,
     )
     ax_sag.set_title("Sagittal  (x = 0 mm, vermis)", color="white", fontsize=11, pad=4)
 
