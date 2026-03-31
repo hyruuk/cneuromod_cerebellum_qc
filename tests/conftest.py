@@ -65,22 +65,22 @@ def synthetic_suit_atlas() -> np.ndarray:
     Labels 1-4 cover 5x10x10 voxels each; rest is 0 (outside cerebellum).
     """
     data = np.zeros(SHAPE_3D, dtype=np.int16)
-    data[0:5, :, :] = 1    # I-IV_R
-    data[5:10, :, :] = 2   # V_R
-    data[10:15, :, :] = 3  # VI_R
-    data[15:20, :, :] = 4  # CrusI_R
+    data[0:5, :, :] = 1    # Left_I_IV
+    data[5:10, :, :] = 2   # Right_I_IV
+    data[10:15, :, :] = 3  # Left_V
+    data[15:20, :, :] = 4  # Right_V
     return data
 
 
 @pytest.fixture
 def synthetic_suit_atlas_full() -> np.ndarray:
     """
-    Synthetic SUIT atlas with all 28 lobules, each with ~1 voxel.
+    Synthetic SUIT atlas with all 34 regions, each with ~1 voxel.
     Used for testing label iteration without needing real coverage.
     """
     data = np.zeros(SHAPE_3D, dtype=np.int16)
     rng = np.random.default_rng(99)
-    coords = rng.integers(0, 20, size=(28, 3))
+    coords = rng.integers(0, 20, size=(34, 3))
     for label_id, (x, y, z) in enumerate(coords, start=1):
         data[x, y, z] = label_id
     return data

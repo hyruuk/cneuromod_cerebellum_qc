@@ -678,7 +678,7 @@ def make_ar1_heatmap(df_runs: pd.DataFrame) -> go.Figure:
 
 
 def make_interlobule_corr_heatmap(corr_matrix: np.ndarray, lobule_names: List[str], subject: str) -> go.Figure:
-    """28×28 inter-lobule Pearson correlation matrix for a single subject."""
+    """Inter-lobule Pearson correlation matrix for a single subject."""
     fig = go.Figure(
         go.Heatmap(
             z=corr_matrix,

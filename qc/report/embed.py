@@ -150,6 +150,64 @@ def tsnr_interactive_viewer(
         return f'<p style="color:orange;">[Interactive viewer unavailable: {e}]</p>'
 
 
+def atlas_interactive_viewer(
+    atlas_img: nib.Nifti1Image,
+    width: str = "100%",
+    height: str = "500px",
+) -> str:
+    """
+    Generate a nilearn interactive 3D viewer for the SUIT atlas.
+
+    Returns an <iframe> tag with a self-contained viewer. Each region is
+    assigned a distinct colour from a discrete colormap; the viewer allows
+    click-to-navigate in orthogonal views.
+
+    Parameters
+    ----------
+    atlas_img:
+        3D integer NIfTI with SUIT label IDs (0 = background).
+    width / height:
+        CSS dimensions for the iframe.
+    """
+    try:
+        import matplotlib.cm as cm
+        from matplotlib.colors import ListedColormap
+        from nilearn import plotting as nlplot
+        from nilearn.datasets import load_mni152_template
+
+        atlas_data = np.asarray(atlas_img.dataobj, dtype=np.float32)
+        n_labels = int(atlas_data.max())
+
+        # Build a discrete colormap: one distinct colour per label.
+        # tab20 + tab20b cover up to 40 colours.
+        base_colors = (
+            [plt.get_cmap("tab20")(i) for i in range(20)]
+            + [plt.get_cmap("tab20b")(i) for i in range(20)]
+        )
+        # index 0 = transparent (background), indices 1..n_labels = region colours
+        rgba = [(0, 0, 0, 0)] + base_colors[:n_labels]
+        cmap = ListedColormap(rgba, name="suit_discrete")
+
+        bg_img = load_mni152_template(resolution=2)
+
+        # nilearn view_img requires finite values; background (0) renders as
+        # transparent via threshold just below 1.
+        view = nlplot.view_img(
+            atlas_img,
+            bg_img=bg_img,
+            cmap=cmap,
+            symmetric_cmap=False,
+            vmin=0,
+            vmax=n_labels,
+            threshold=0.5,
+            title="SUIT Cerebellar Atlas — click to navigate",
+            colorbar=False,
+        )
+        return view.get_iframe(width=width, height=height)
+    except Exception as e:
+        return f'<p style="color:orange;">[Atlas viewer unavailable: {e}]</p>'
+
+
 def array_to_base64_png(
     arr: np.ndarray,
     cmap: str = "RdBu_r",

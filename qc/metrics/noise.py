@@ -444,7 +444,7 @@ def compute_interlobule_correlation(
     Returns
     -------
     corr_matrix:
-        (28, 28) float32 correlation matrix.
+        (N, N) float32 correlation matrix where N = number of SUIT regions.
     lobule_names:
         List of lobule names corresponding to matrix rows/columns.
     """

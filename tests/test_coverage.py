@@ -26,7 +26,7 @@ class TestComputeMaskCoverage:
         result = compute_mask_coverage(synthetic_partial_mask, synthetic_suit_atlas)
         # Label 1 (x=0:5) has no overlap with mask (x=5:15)
         from qc.atlas import SUIT_LABEL_MAP
-        name_1 = SUIT_LABEL_MAP[1]  # I-IV_R
+        name_1 = SUIT_LABEL_MAP[1]  # Left_I_IV
         cov_1 = result.get(f"suit_coverage_{name_1}", 1.0)
         assert cov_1 == pytest.approx(0.0, abs=1e-6), \
             f"Label 1 should have 0% coverage with partial mask, got {cov_1}"
@@ -77,7 +77,7 @@ class TestComputeSignalDropout:
         result = compute_signal_dropout(synthetic_boldref, atlas, mask_data)
 
         from qc.atlas import SUIT_LABEL_MAP
-        name_1 = SUIT_LABEL_MAP.get(1, "I-IV_R")
+        name_1 = SUIT_LABEL_MAP.get(1, "Left_I_IV")
         rel = result.get(f"dropout_{name_1}", 1.0)
         flag = result.get(f"dropout_flag_{name_1}", 0.0)
         # Relative signal in x<5 = 200/1000 = 0.2 < threshold 0.5

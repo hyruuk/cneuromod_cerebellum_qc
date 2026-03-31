@@ -74,7 +74,7 @@ def process_run(
     extract_carpet:
         If True, extract and return carpet plot data.
     extract_interlobule:
-        If True, compute 28×28 inter-lobule correlation matrix.
+        If True, compute inter-lobule correlation matrix.
 
     Returns
     -------

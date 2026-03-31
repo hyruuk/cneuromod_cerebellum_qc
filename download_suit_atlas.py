@@ -25,15 +25,15 @@ from urllib.request import urlretrieve
 # ---------------------------------------------------------------------------
 
 ATLAS_URLS = {
-    # Primary: discrete label atlas (28 cerebellar lobules) in MNI space
+    # Primary: discrete label atlas (34 cerebellar regions) in MNI space
     "atlas_nii": (
         "https://github.com/DiedrichsenLab/cerebellar_atlases/raw/master/"
         "Diedrichsen_2009/atl-Anatom_space-MNI_dseg.nii"
     ),
-    # Label table (TSV: index, name, color)
+    # Authoritative label table (TSV: index, name, color)
     "atlas_tsv": (
         "https://github.com/DiedrichsenLab/cerebellar_atlases/raw/master/"
-        "Diedrichsen_2009/atl-Anatom_space-MNI_dseg.tsv"
+        "Diedrichsen_2009/atl-Anatom.tsv"
     ),
 }
 
@@ -72,14 +72,14 @@ def verify_atlas(nii_path: Path) -> bool:
         img = nib.load(nii_path)
         data = np.asarray(img.dataobj, dtype=np.int16)
         present = set(np.unique(data)) - {0}
-        expected = set(range(1, 29))  # labels 1–28
+        expected = set(range(1, 35))  # labels 1–34
         missing = expected - present
         if missing:
             print(f"  WARNING: Missing labels after download: {sorted(missing)}")
             print("  The atlas may be in a different version with different label IDs.")
             print("  This is not necessarily an error — check the TSV label file.")
         else:
-            print(f"  ✓ All 28 expected labels found.")
+            print(f"  ✓ All 34 expected labels found.")
         print(f"  Atlas shape: {img.shape}, dtype: {img.get_data_dtype()}")
         print(f"  Voxel size: {img.header.get_zooms()}")
         return True
@@ -101,23 +101,12 @@ def compress_nii(nii_path: Path) -> Path:
     return gz_path
 
 
-def write_label_tsv(output_dir: Path) -> Path:
-    """
-    Write the SUIT label TSV from the built-in SUIT_LABEL_MAP.
-
-    The Diedrichsen lab GitHub TSV file may not be publicly accessible;
-    we generate it from the known label map instead.
-    """
-    from qc.atlas import SUIT_LABEL_MAP
-
-    tsv_path = output_dir / OUTPUT_NAMES["atlas_tsv"]
-    with open(tsv_path, "w") as f:
-        f.write("index\tname\n")
-        f.write("0\tBackground\n")
-        for idx, name in sorted(SUIT_LABEL_MAP.items()):
-            f.write(f"{idx}\t{name}\n")
-    print(f"  Label TSV generated from built-in map: {tsv_path}")
-    return tsv_path
+def download_label_tsv(output_dir: Path) -> Path:
+    """Download the authoritative label TSV from the Diedrichsen lab GitHub."""
+    tsv_dest = output_dir / OUTPUT_NAMES["atlas_tsv"]
+    download_file(ATLAS_URLS["atlas_tsv"], tsv_dest)
+    print(f"  Saved: {tsv_dest}")
+    return tsv_dest
 
 
 def main():
@@ -161,12 +150,13 @@ def main():
         gz_dest = compress_nii(nii_dest)
         print(f"  Saved: {gz_dest}")
 
-    # Generate label TSV from built-in map (GitHub TSV URL is unreliable)
+    # Download authoritative label TSV from Diedrichsen lab GitHub
     tsv_dest = output_dir / OUTPUT_NAMES["atlas_tsv"]
     if tsv_dest.exists():
         print(f"✓ Label TSV already exists: {tsv_dest}")
     else:
-        write_label_tsv(output_dir)
+        print("\nDownloading label TSV...")
+        download_label_tsv(output_dir)
 
     # Verify
     if not args.no_verify:

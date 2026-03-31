@@ -156,7 +156,12 @@ def main() -> None:
     if not args.dry_run and not args.output_dir:
         sys.exit("ERROR: --output_dir cannot be empty.")
 
-    output_dir = Path(args.output_dir) if args.output_dir else None
+    # Derive dataset name from fmriprep_dir (strip .fmriprep suffix if present)
+    dataset_name = fmriprep_dir.name
+    if dataset_name.endswith(".fmriprep"):
+        dataset_name = dataset_name[: -len(".fmriprep")]
+
+    output_dir = Path(args.output_dir) / dataset_name if not args.dry_run else None
 
     # -----------------------------------------------------------------------
     # Step 1: Discover runs
@@ -214,6 +219,7 @@ def main() -> None:
             ref_img,
             cache_dir=output_dir,
         )
+        atlas_img_orig = nib.load(suit_atlas_path)  # native resolution for HTML viewer
         print(f"  SUIT atlas loaded: shape={suit_data.shape}, {len(suit_labels)} lobules.")
 
     # -----------------------------------------------------------------------
@@ -392,6 +398,7 @@ def main() -> None:
         run_results=run_results,
         tsnr_imgs=tsnr_imgs,
         output_path=report_path,
+        atlas_img=atlas_img_orig if not args.no_bold else None,
     )
 
     print(f"\n✓ Done! Open in browser: {report_path}")

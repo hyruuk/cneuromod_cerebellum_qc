@@ -2,7 +2,7 @@
 Atlas loading and ROI extraction utilities.
 
 Handles:
-- SUIT 28-lobule cerebellar atlas (in MNI space)
+- SUIT cerebellar atlas — Diedrichsen 2009 Anatom parcellation (34 regions, MNI space)
 - FreeSurfer aseg segmentation (per-subject, loaded once)
 - Resampling to BOLD grid
 - Label maps for both atlases
@@ -23,35 +23,43 @@ from nilearn.image import resample_to_img
 # Label maps
 # ---------------------------------------------------------------------------
 
+# Fallback label map — matches atl-Anatom.tsv from DiedrichsenLab/cerebellar_atlases.
+# load_suit_atlas() will override this from the downloaded TSV when available.
 SUIT_LABEL_MAP: Dict[int, str] = {
-    1: "I-IV_R",
-    2: "V_R",
-    3: "VI_R",
-    4: "CrusI_R",
-    5: "CrusII_R",
-    6: "VIIB_R",
-    7: "VIIIA_R",
-    8: "VIIIB_R",
-    9: "IX_R",
-    10: "X_R",
-    11: "I-IV_L",
-    12: "V_L",
-    13: "VI_L",
-    14: "CrusI_L",
-    15: "CrusII_L",
-    16: "VIIB_L",
-    17: "VIIIA_L",
-    18: "VIIIB_L",
-    19: "IX_L",
-    20: "X_L",
-    21: "Vermis_VI",
-    22: "Vermis_VIIA",
-    23: "Vermis_VIIB",
-    24: "Vermis_VIIIA",
-    25: "Vermis_VIIIB",
-    26: "Vermis_IX",
+    1: "Left_I_IV",
+    2: "Right_I_IV",
+    3: "Left_V",
+    4: "Right_V",
+    5: "Left_VI",
+    6: "Vermis_VI",
+    7: "Right_VI",
+    8: "Left_CrusI",
+    9: "Vermis_CrusI",
+    10: "Right_CrusI",
+    11: "Left_CrusII",
+    12: "Vermis_CrusII",
+    13: "Right_CrusII",
+    14: "Left_VIIb",
+    15: "Vermis_VIIb",
+    16: "Right_VIIb",
+    17: "Left_VIIIa",
+    18: "Vermis_VIIIa",
+    19: "Right_VIIIa",
+    20: "Left_VIIIb",
+    21: "Vermis_VIIIb",
+    22: "Right_VIIIb",
+    23: "Left_IX",
+    24: "Vermis_IX",
+    25: "Right_IX",
+    26: "Left_X",
     27: "Vermis_X",
-    28: "Vermis_I-V",
+    28: "Right_X",
+    29: "Left_Dentate",
+    30: "Right_Dentate",
+    31: "Left_Interposed",
+    32: "Right_Interposed",
+    33: "Left_Fastigial",
+    34: "Right_Fastigial",
 }
 
 # FreeSurfer aseg labels relevant for cerebellum / brainstem / ventricles
@@ -78,6 +86,29 @@ ASEG_CEREB_CORTEX_LABELS = {8: "L-Cereb-Cortex", 47: "R-Cereb-Cortex"}
 # ---------------------------------------------------------------------------
 # SUIT atlas loading
 # ---------------------------------------------------------------------------
+
+def _tsv_path_for_atlas(suit_path: Path) -> Path:
+    """Derive the expected TSV label path: strip .nii/.nii.gz, append .tsv."""
+    stem = suit_path.name
+    for suffix in (".gz", ".nii"):
+        if stem.endswith(suffix):
+            stem = stem[: -len(suffix)]
+    return suit_path.parent / (stem + ".tsv")
+
+
+def _load_label_map_from_tsv(tsv_path: Path) -> Dict[int, str]:
+    """Parse a BIDS atlas TSV (columns: index, name, ...) into {int: str}."""
+    import csv
+    label_map: Dict[int, str] = {}
+    with open(tsv_path, newline="") as f:
+        reader = csv.DictReader(f, delimiter="\t")
+        for row in reader:
+            idx = int(row["index"])
+            if idx == 0:
+                continue  # skip background
+            label_map[idx] = row["name"]
+    return label_map
+
 
 def load_suit_atlas(
     suit_path: str | Path,
@@ -107,6 +138,22 @@ def load_suit_atlas(
     suit_path = Path(suit_path)
     cache_dir = Path(cache_dir) if cache_dir else suit_path.parent
 
+    # Load label map from TSV alongside the atlas; fall back to hardcoded map.
+    # Updating SUIT_LABEL_MAP in-place propagates to all modules that imported it.
+    tsv_path = _tsv_path_for_atlas(suit_path)
+    if tsv_path.exists():
+        label_map = _load_label_map_from_tsv(tsv_path)
+        SUIT_LABEL_MAP.clear()
+        SUIT_LABEL_MAP.update(label_map)
+    else:
+        label_map = SUIT_LABEL_MAP
+        warnings.warn(
+            f"No label TSV found at {tsv_path}. Using hardcoded fallback label map. "
+            "Run download_suit_atlas.py to obtain the authoritative labels.",
+            UserWarning,
+            stacklevel=2,
+        )
+
     # Check for cached resampled version
     cached = cache_dir / f"suit_resampled_{reference_img.shape[0]}x{reference_img.shape[1]}x{reference_img.shape[2]}.nii.gz"
     if cached.exists():
@@ -125,7 +172,7 @@ def load_suit_atlas(
 
     # Validate: check which label IDs are present and warn about missing ones
     present_labels = set(np.unique(suit_data)) - {0}
-    expected_labels = set(SUIT_LABEL_MAP.keys())
+    expected_labels = set(label_map.keys())
     missing = expected_labels - present_labels
     if missing:
         warnings.warn(
@@ -136,7 +183,7 @@ def load_suit_atlas(
         )
 
     # Warn about lobules with very few voxels
-    for label_id, name in SUIT_LABEL_MAP.items():
+    for label_id, name in label_map.items():
         n_vox = (suit_data == label_id).sum()
         if 0 < n_vox < 5:
             warnings.warn(
@@ -146,7 +193,7 @@ def load_suit_atlas(
                 stacklevel=2,
             )
 
-    return suit_data, SUIT_LABEL_MAP
+    return suit_data, label_map
 
 
 def load_subject_aseg(

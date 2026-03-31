@@ -36,7 +36,7 @@ from qc.report.figures import (
     make_motor_cereb_corr_bar,
     make_usable_volumes_bar,
 )
-from qc.report.embed import tsnr_slices_to_html, tsnr_interactive_viewer
+from qc.report.embed import tsnr_slices_to_html, tsnr_interactive_viewer, atlas_interactive_viewer
 
 
 _HTML_TEMPLATE = """\
@@ -90,7 +90,7 @@ _HTML_TEMPLATE = """\
     Generated: {timestamp} &nbsp;|&nbsp;
     fMRIPrep 20.2.5 &nbsp;|&nbsp;
     Space: MNI152NLin2009cAsym &nbsp;|&nbsp;
-    Atlas: SUIT (28 lobules) + FreeSurfer aseg
+    Atlas: SUIT Anatom (34 regions) + FreeSurfer aseg
   </p>
   <div class="note">
     <strong>Note:</strong> This report covers all available subjects.
@@ -131,6 +131,7 @@ def generate_html_report(
     run_results: List[dict],
     tsnr_imgs: Dict[str, object],
     output_path: str | Path,
+    atlas_img: Optional[object] = None,
 ) -> None:
     """
     Assemble all sections into a single self-contained HTML report.
@@ -184,6 +185,13 @@ def generate_html_report(
     # Section 1 — tSNR
     # -----------------------------------------------------------------------
     s1_parts = []
+
+    # Atlas reference viewer (shown first so it can be consulted alongside tSNR maps)
+    if atlas_img is not None:
+        s1_parts.append(_subsection(
+            "SUIT Atlas Reference — interactive (click to navigate, compare with tSNR maps below)",
+            atlas_interactive_viewer(atlas_img),
+        ))
 
     # Interactive 3D tSNR viewers (one per subject, nilearn view_img)
     if tsnr_imgs:
