@@ -20,6 +20,7 @@ from qc.discovery import RunInfo
 from qc.atlas import (
     SUIT_LABEL_MAP,
     ASEG_LABEL_MAP,
+    YEO7_LABEL_MAP,
     load_subject_aseg,
     extract_roi_stats,
 )
@@ -46,6 +47,7 @@ def process_run(
     suit_data: np.ndarray,
     aseg_data: Optional[np.ndarray],
     aseg_img: Optional[nib.Nifti1Image],
+    yeo_data: Optional[np.ndarray] = None,
     fd_threshold: float = 0.5,
     dvars_threshold: float = 1.5,
     no_bold: bool = False,
@@ -65,6 +67,8 @@ def process_run(
         Pre-loaded aseg array for this subject, or None.
     aseg_img:
         nibabel aseg image (for resampling reference), or None.
+    yeo_data:
+        Pre-loaded Yeo 7-network atlas array (resampled to reference grid), or None.
     fd_threshold:
         FD scrubbing threshold (mm).
     dvars_threshold:
@@ -113,6 +117,7 @@ def process_run(
         result["_carpet"] = None
         result["_interlobule_corr"] = None
         result["_interlobule_names"] = None
+        result["_gm_display_mask"] = None
         return result
 
     # --- BOLD-based metrics ---
@@ -120,6 +125,7 @@ def process_run(
         result["_carpet"] = None
         result["_interlobule_corr"] = None
         result["_interlobule_names"] = None
+        result["_gm_display_mask"] = None
         return result
 
     try:
@@ -131,6 +137,7 @@ def process_run(
         result["_carpet"] = None
         result["_interlobule_corr"] = None
         result["_interlobule_names"] = None
+        result["_gm_display_mask"] = None
         return result
 
     # Load mask
@@ -157,6 +164,19 @@ def process_run(
         if mask_data is not None:
             gm_cereb_mask = (gm_cereb_mask & mask_data.astype(bool)).astype(np.uint8)
 
+    # Cerebral cortex grey matter mask: aseg labels 3 (L-Cerebral-Cortex) + 42 (R-Cerebral-Cortex).
+    # Used for Yeo network tSNR to restrict to cortical GM only.
+    gm_cortex_mask = None
+    if aseg_resampled is not None:
+        gm_cortex_mask = np.isin(aseg_resampled, [3, 42]).astype(np.uint8)
+        if mask_data is not None:
+            gm_cortex_mask = (gm_cortex_mask & mask_data.astype(bool)).astype(np.uint8)
+
+    # Resample Yeo atlas to BOLD grid if needed
+    yeo_resampled = None
+    if yeo_data is not None:
+        yeo_resampled = _resample_atlas_to_bold(yeo_data, bold_img)
+
     # --- tSNR ---
     try:
         tsnr_data, tsnr_img = compute_tsnr_map(bold_img, mask_img)
@@ -169,9 +189,28 @@ def process_run(
         )
         result.update(tsnr_metrics)
         result["_tsnr_img"] = tsnr_img
+
+        # Combined GM mask for display: cerebral cortex (3+42) + cerebellar cortex (8+47)
+        # Used to mask the tSNR viewer so only GM is shown.
+        if gm_cereb_mask is not None or gm_cortex_mask is not None:
+            gm_display = np.zeros(tsnr_data.shape, dtype=bool)
+            if gm_cereb_mask is not None:
+                gm_display |= gm_cereb_mask.astype(bool)
+            if gm_cortex_mask is not None:
+                gm_display |= gm_cortex_mask.astype(bool)
+            result["_gm_display_mask"] = gm_display
+        else:
+            result["_gm_display_mask"] = None
+
+        # Yeo network tSNR (cortical GM masked)
+        if yeo_resampled is not None and gm_cortex_mask is not None:
+            yeo_stats = extract_roi_stats(tsnr_data, yeo_resampled, YEO7_LABEL_MAP, gm_cortex_mask)
+            for name, val in yeo_stats.items():
+                result[f"yeo_{name}"] = val
     except Exception as e:
         warnings.warn(f"[{run_info.subject}/{run_info.session}/{run_info.run}] tSNR error: {e}")
         result["_tsnr_img"] = None
+        result["_gm_display_mask"] = None
 
     # --- Coverage (mask coverage + dropout) ---
     if mask_img is not None:

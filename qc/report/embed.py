@@ -154,46 +154,46 @@ def tsnr_interactive_viewer(
 
 def atlas_interactive_viewer(
     atlas_img: nib.Nifti1Image,
+    label_map: Optional[dict] = None,
     width: str = "100%",
     height: str = "500px",
 ) -> str:
     """
-    Generate a nilearn interactive 3D viewer for the SUIT atlas.
+    Generate a nilearn interactive 3D viewer for the SUIT atlas, plus an
+    HTML legend table showing region name, colour swatch, and MNI centroid.
 
-    Returns an <iframe> tag with a self-contained viewer. Each region is
-    assigned a distinct colour from a discrete colormap; the viewer allows
-    click-to-navigate in orthogonal views.
+    Returns an <iframe> followed by a colour-coded legend table.
 
     Parameters
     ----------
     atlas_img:
         3D integer NIfTI with SUIT label IDs (0 = background).
+    label_map:
+        Dict mapping integer label IDs → region name strings.
+        If provided, a legend table is appended below the viewer.
     width / height:
         CSS dimensions for the iframe.
     """
     try:
-        import matplotlib.cm as cm
         from matplotlib.colors import ListedColormap
         from nilearn import plotting as nlplot
         from nilearn.datasets import load_mni152_template
 
-        atlas_data = np.asarray(atlas_img.dataobj, dtype=np.float32)
+        atlas_data_int = np.asarray(atlas_img.dataobj, dtype=np.int32)
+        atlas_data = atlas_data_int.astype(np.float32)
         n_labels = int(atlas_data.max())
 
-        # Build a discrete colormap: one distinct colour per label.
-        # tab20 + tab20b cover up to 40 colours.
+        # Build discrete colormap: tab20 + tab20b cover up to 40 colours.
+        # label_id k → base_colors[k-1] (index 0 = transparent background)
         base_colors = (
             [plt.get_cmap("tab20")(i) for i in range(20)]
             + [plt.get_cmap("tab20b")(i) for i in range(20)]
         )
-        # index 0 = transparent (background), indices 1..n_labels = region colours
         rgba = [(0, 0, 0, 0)] + base_colors[:n_labels]
         cmap = ListedColormap(rgba, name="suit_discrete")
 
         bg_img = load_mni152_template(resolution=2)
 
-        # nilearn view_img requires finite values; background (0) renders as
-        # transparent via threshold just below 1.
         view = nlplot.view_img(
             atlas_img,
             bg_img=bg_img,
@@ -205,7 +205,68 @@ def atlas_interactive_viewer(
             title="SUIT Cerebellar Atlas — click to navigate",
             colorbar=False,
         )
-        return view.get_iframe(width=width, height=height)
+        iframe_html = view.get_iframe(width=width, height=height)
+
+        # --- Legend table ---
+        if label_map is None:
+            return iframe_html
+
+        affine = atlas_img.affine
+
+        def _rgba_to_css(r, g, b, a) -> str:
+            return f"#{int(r*255):02x}{int(g*255):02x}{int(b*255):02x}"
+
+        rows_html = ""
+        for label_id in sorted(label_map.keys()):
+            name = label_map[label_id]
+            color_rgba = base_colors[label_id - 1] if label_id - 1 < len(base_colors) else (0.5, 0.5, 0.5, 1.0)
+            css_color = _rgba_to_css(*color_rgba)
+
+            # Centroid in MNI mm
+            voxels = np.argwhere(atlas_data_int == label_id)
+            if len(voxels) > 0:
+                centroid_vox = voxels.mean(axis=0)
+                centroid_mni = affine @ np.append(centroid_vox, 1.0)
+                cx, cy, cz = centroid_mni[:3]
+                coord_str = f"({cx:.0f}, {cy:.0f}, {cz:.0f})"
+            else:
+                coord_str = "—"
+
+            rows_html += (
+                f"<tr>"
+                f'<td style="text-align:center;">{label_id}</td>'
+                f'<td><span style="display:inline-block;width:18px;height:18px;'
+                f'background:{css_color};border:1px solid #999;border-radius:3px;'
+                f'vertical-align:middle;"></span></td>'
+                f"<td>{name}</td>"
+                f'<td style="font-family:monospace;color:#555;">{coord_str}</td>'
+                f"</tr>\n"
+            )
+
+        legend_html = f"""
+<details style="margin-top:12px;">
+  <summary style="cursor:pointer;font-weight:bold;color:#636EFA;">
+    Atlas Legend — {n_labels} regions (click to expand)
+  </summary>
+  <div style="max-height:400px;overflow-y:auto;margin-top:8px;">
+    <table style="border-collapse:collapse;width:100%;font-size:0.88em;">
+      <thead>
+        <tr style="background:#636EFA;color:white;">
+          <th style="padding:6px 10px;">ID</th>
+          <th style="padding:6px 10px;">Colour</th>
+          <th style="padding:6px 10px;text-align:left;">Region</th>
+          <th style="padding:6px 10px;text-align:left;">MNI centroid (x,y,z mm)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows_html}
+      </tbody>
+    </table>
+  </div>
+</details>"""
+
+        return iframe_html + legend_html
+
     except Exception as e:
         return f'<p style="color:orange;">[Atlas viewer unavailable: {e}]</p>'
 

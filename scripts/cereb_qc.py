@@ -189,6 +189,7 @@ def main() -> None:
         print("\n[2/6] Skipping SUIT atlas (--no_bold mode, confounds only).")
         suit_data = np.zeros((1, 1, 1), dtype=np.int16)
         suit_labels = {}
+        yeo_data = None
     else:
         print("\n[2/6] Loading SUIT atlas...")
         from qc.atlas import load_suit_atlas
@@ -227,6 +228,15 @@ def main() -> None:
         )
         atlas_img_orig = nib.load(suit_atlas_path)  # native resolution for HTML viewer
         print(f"  SUIT atlas loaded: shape={suit_data.shape}, {len(suit_labels)} lobules.")
+
+        print("  Loading Yeo 7-network atlas...")
+        from qc.atlas import load_yeo_atlas
+        try:
+            yeo_data, yeo_labels = load_yeo_atlas(ref_img)
+            print(f"  Yeo atlas loaded: shape={yeo_data.shape}, {len(yeo_labels)} networks.")
+        except Exception as e:
+            warnings.warn(f"Yeo atlas unavailable: {e}. Yeo metrics will be skipped.")
+            yeo_data = None
 
     # -----------------------------------------------------------------------
     # Step 3: Pre-load aseg per subject (loaded once, shared across runs)
@@ -276,6 +286,7 @@ def main() -> None:
             suit_data=suit_data,
             aseg_data=aseg_data,
             aseg_img=aseg_img,
+            yeo_data=yeo_data,
             fd_threshold=args.fd_threshold,
             dvars_threshold=args.dvars_threshold,
             no_bold=args.no_bold,
@@ -331,6 +342,7 @@ def main() -> None:
                         suit_data=suit_data,
                         aseg_data=aseg_data,
                         aseg_img=aseg_img,
+                        yeo_data=yeo_data,
                         fd_threshold=args.fd_threshold,
                         dvars_threshold=args.dvars_threshold,
                         no_bold=False,
@@ -363,10 +375,11 @@ def main() -> None:
             usable_str = f"{usable:.1f}%" if np.isfinite(usable) else "N/A"
             print(f"    {subj}: cereb tSNR={tsnr_str}, mean FD={fd_str}, usable={usable_str}")
 
-    # Average tSNR maps across all runs per subject
+    # Average tSNR maps across all runs per subject, then mask to GM only for display
     print("\n  Averaging tSNR maps across runs per subject...")
     _tsnr_stacks: Dict[str, list] = {}
     _tsnr_ref_img: Dict[str, object] = {}
+    _gm_masks: Dict[str, list] = {}
     for r in run_results:
         subj = r["subject"]
         img = r.get("_tsnr_img")
@@ -375,15 +388,30 @@ def main() -> None:
         if subj not in _tsnr_stacks:
             _tsnr_stacks[subj] = []
             _tsnr_ref_img[subj] = img
+            _gm_masks[subj] = []
         _tsnr_stacks[subj].append(img.get_fdata(dtype=np.float32))
+        gm_mask = r.get("_gm_display_mask")
+        if gm_mask is not None:
+            _gm_masks[subj].append(gm_mask)
 
     tsnr_imgs: Dict[str, object] = {}
     for subj, arrays in _tsnr_stacks.items():
         n = len(arrays)
         stack = np.stack(arrays, axis=-1)  # (x, y, z, n_runs)
         mean_tsnr = np.nanmean(stack, axis=-1).astype(np.float32)
+
+        # Apply union GM mask: keep only voxels that are GM in at least one run
+        gm_masks = _gm_masks.get(subj, [])
+        if gm_masks:
+            union_gm = np.zeros(mean_tsnr.shape, dtype=bool)
+            for m in gm_masks:
+                union_gm |= m
+            mean_tsnr[~union_gm] = np.nan
+            print(f"    {subj}: averaged {n} tSNR maps, GM mask applied ({union_gm.sum()} voxels)")
+        else:
+            print(f"    {subj}: averaged {n} tSNR maps (no GM mask available)")
+
         tsnr_imgs[subj] = nib.Nifti1Image(mean_tsnr, _tsnr_ref_img[subj].affine)
-        print(f"    {subj}: averaged {n} tSNR maps")
 
     # Save aggregated DataFrames as CSV for further analysis
     dfs["runs"].to_csv(output_dir / "qc_runs.csv", index=False)

@@ -35,6 +35,8 @@ from qc.report.figures import (
     make_signal_drift_scatter,
     make_motor_cereb_corr_bar,
     make_usable_volumes_bar,
+    make_yeo_cereb_scatter,
+    make_yeo_lobule_corr_matrix,
 )
 from qc.report.embed import tsnr_slices_to_html, tsnr_interactive_viewer, atlas_interactive_viewer
 
@@ -105,6 +107,7 @@ _HTML_TEMPLATE = """\
   {section_4}
   {section_5}
   {section_6}
+  {section_7}
 
 </body>
 </html>
@@ -190,7 +193,7 @@ def generate_html_report(
     if atlas_img is not None:
         s1_parts.append(_subsection(
             "SUIT Atlas Reference — interactive (click to navigate, compare with tSNR maps below)",
-            atlas_interactive_viewer(atlas_img),
+            atlas_interactive_viewer(atlas_img, label_map=SUIT_LABEL_MAP),
         ))
 
     # Compute a global vmax across all subjects so colour scales are comparable
@@ -417,6 +420,31 @@ def generate_html_report(
     section_6 = _section("sec-6", "6. Advanced Metrics for Gameplay Analysis", "\n".join(s6_parts))
 
     # -----------------------------------------------------------------------
+    # Section 7 — Cortex–Cerebellum tSNR comparison
+    # -----------------------------------------------------------------------
+    s7_parts = []
+    s7_parts.append(
+        '<div class="note">tSNR is extracted per Yeo 7-network restricted to cerebral cortex GM '
+        '(FreeSurfer aseg labels 3+42), matching the cerebellar GM masking approach. '
+        'Correlations across sessions reflect shared scan-quality fluctuation, '
+        '<strong>not functional connectivity</strong>.</div>'
+    )
+
+    if not df_sessions.empty:
+        s7_parts.append(_subsection(
+            "Yeo Network vs Whole-Cerebellum tSNR (session-level dots)",
+            _safe_fig(make_yeo_cereb_scatter, df_sessions),
+        ))
+        s7_parts.append(_subsection(
+            "Yeo Network × SUIT Lobule tSNR Correlation Matrix (per subject, across sessions)",
+            _safe_fig(make_yeo_lobule_corr_matrix, df_sessions, suit_label_names),
+        ))
+    else:
+        s7_parts.append('<p class="info">Yeo–Cerebellum plots require BOLD data.</p>')
+
+    section_7 = _section("sec-7", "7. Cortex–Cerebellum tSNR Comparison (Yeo 7 Networks)", "\n".join(s7_parts))
+
+    # -----------------------------------------------------------------------
     # Assemble final HTML
     # -----------------------------------------------------------------------
     html = _HTML_TEMPLATE.format(
@@ -428,6 +456,7 @@ def generate_html_report(
         section_4=section_4,
         section_5=section_5,
         section_6=section_6,
+        section_7=section_7,
     )
 
     output_path = Path(output_path)

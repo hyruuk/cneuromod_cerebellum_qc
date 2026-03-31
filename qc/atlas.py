@@ -82,6 +82,24 @@ ASEG_MOTOR_LABELS = {1024: "L-precentral", 2024: "R-precentral"}
 # Combined cerebellar cortex labels (for inter-region correlation)
 ASEG_CEREB_CORTEX_LABELS = {8: "L-Cereb-Cortex", 47: "R-Cereb-Cortex"}
 
+# Cerebral cortex labels (for cortical GM masking of Yeo network tSNR)
+ASEG_CORTEX_LABELS = {3: "L-Cerebral-Cortex", 42: "R-Cerebral-Cortex"}
+
+# SUIT deep nuclei — too small at BOLD resolution for reliable timeseries
+SUIT_DEEP_NUCLEI = {"Left_Dentate", "Right_Dentate", "Left_Interposed", "Right_Interposed",
+                    "Left_Fastigial", "Right_Fastigial"}
+
+# Yeo 7-network parcellation label map
+YEO7_LABEL_MAP: Dict[int, str] = {
+    1: "Visual",
+    2: "Somatomotor",
+    3: "DorsAttn",
+    4: "SalVentAttn",
+    5: "Limbic",
+    6: "Control",
+    7: "Default",
+}
+
 
 # ---------------------------------------------------------------------------
 # SUIT atlas loading
@@ -233,6 +251,41 @@ def _is_available(path: Path) -> bool:
         return real.exists() and real.stat().st_size > 0
     except (OSError, PermissionError):
         return False
+
+
+# ---------------------------------------------------------------------------
+# Yeo 7-network atlas loading
+# ---------------------------------------------------------------------------
+
+def load_yeo_atlas(
+    reference_img: nib.Nifti1Image,
+) -> Tuple[np.ndarray, Dict[int, str]]:
+    """
+    Load the Yeo 2011 7-network cortical atlas and resample to the BOLD grid.
+
+    Uses nilearn's built-in fetcher (downloads once to ~/.nilearn/data/).
+    The atlas is in MNI152 space (1 mm); resampled to BOLD space with
+    nearest-neighbour interpolation.
+
+    Parameters
+    ----------
+    reference_img:
+        A nibabel image in the target space (e.g., a brain mask or BOLD volume).
+
+    Returns
+    -------
+    yeo_data:
+        3D int16 array of Yeo network IDs (0 = background), resampled to BOLD grid.
+    label_map:
+        Dict mapping integer IDs → network name strings.
+    """
+    from nilearn.datasets import fetch_atlas_yeo_2011
+
+    yeo = fetch_atlas_yeo_2011()
+    yeo_img = nib.load(yeo.thick_7)
+    resampled = resample_to_img(yeo_img, reference_img, interpolation="nearest", copy_header=True)
+    yeo_data = np.asarray(resampled.dataobj, dtype=np.int16)
+    return yeo_data, YEO7_LABEL_MAP
 
 
 # ---------------------------------------------------------------------------

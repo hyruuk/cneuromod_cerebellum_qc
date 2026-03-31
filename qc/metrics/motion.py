@@ -244,21 +244,30 @@ def parse_acompcor_stats(
             result[f"{prefix}_n_for_80pct"] = float("nan")
             continue
 
-        # Sort by component number to get cumulative variance curve in order
-        sorted_items = sorted(retained.items())
+        # Sort by numeric component index (not lexicographic) so cumvar curve is monotonic
+        def _comp_index(key: str) -> int:
+            m = re.search(r"(\d+)$", key)
+            return int(m.group(1)) if m else 0
+
+        sorted_items = sorted(retained.items(), key=lambda kv: _comp_index(kv[0]))
         cumvar_curve = [v["CumulativeVarianceExplained"] for _, v in sorted_items]
 
         n_retained = len(cumvar_curve)
         cumvar_final = cumvar_curve[-1]
 
-        # Components needed to reach 50% / 80% variance
-        n_for_50 = next((i + 1 for i, cv in enumerate(cumvar_curve) if cv >= 0.5), n_retained)
-        n_for_80 = next((i + 1 for i, cv in enumerate(cumvar_curve) if cv >= 0.8), n_retained)
+        # Components needed to reach 50% / 80% variance.
+        # Return NaN when the threshold is never reached (all retained components
+        # together don't explain enough variance) so the plot can distinguish
+        # "not reached" from "reached at the last component".
+        n_for_50_raw = next((i + 1 for i, cv in enumerate(cumvar_curve) if cv >= 0.5), None)
+        n_for_80_raw = next((i + 1 for i, cv in enumerate(cumvar_curve) if cv >= 0.8), None)
+        n_for_50 = n_for_50_raw if n_for_50_raw is not None else float("nan")
+        n_for_80 = n_for_80_raw if n_for_80_raw is not None else float("nan")
 
         result[f"{prefix}_n_retained"] = float(n_retained)
         result[f"{prefix}_cumvar_final"] = float(cumvar_final)
-        result[f"{prefix}_n_for_50pct"] = float(n_for_50)
-        result[f"{prefix}_n_for_80pct"] = float(n_for_80)
+        result[f"{prefix}_n_for_50pct"] = n_for_50  # NaN if 50% never reached
+        result[f"{prefix}_n_for_80pct"] = n_for_80  # NaN if 80% never reached
 
     return result
 

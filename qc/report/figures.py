@@ -777,6 +777,176 @@ def make_motor_cereb_corr_bar(df_runs: pd.DataFrame) -> go.Figure:
 # Section 5 — Usable data
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Section 7 — Cortex–Cerebellum tSNR comparison
+# ---------------------------------------------------------------------------
+
+YEO7_NAMES = ["Visual", "Somatomotor", "DorsAttn", "SalVentAttn", "Limbic", "Control", "Default"]
+
+
+def make_yeo_cereb_scatter(df_sessions: pd.DataFrame) -> go.Figure:
+    """
+    7-panel scatter: Yeo network tSNR (x) vs whole-cerebellum tSNR (y),
+    one dot per session, coloured by subject.
+
+    Each panel = one Yeo network. Shared y-axis so cerebellar tSNR is comparable
+    across networks. Reveals which cortical networks co-vary with cerebellar quality
+    across sessions.
+    """
+    yeo_cols = [f"yeo_{n}" for n in YEO7_NAMES]
+    available = [n for n, c in zip(YEO7_NAMES, yeo_cols) if c in df_sessions.columns]
+
+    if not available:
+        fig = go.Figure()
+        fig.update_layout(title=_fig_title("Yeo–Cerebellum tSNR Scatter (no Yeo data)"), height=300)
+        return fig
+
+    fig = make_subplots(
+        rows=1,
+        cols=len(available),
+        subplot_titles=available,
+        shared_yaxes=True,
+    )
+
+    subjects = sorted(df_sessions["subject"].unique())
+    cereb_col = "cereb_gm_mean" if "cereb_gm_mean" in df_sessions.columns else "cereb_mean"
+
+    for col_idx, network in enumerate(available, start=1):
+        yeo_col = f"yeo_{network}"
+        for subj in subjects:
+            sdf = df_sessions[df_sessions["subject"] == subj].dropna(subset=[yeo_col, cereb_col])
+            if sdf.empty:
+                continue
+            fig.add_trace(
+                go.Scatter(
+                    x=sdf[yeo_col].tolist(),
+                    y=sdf[cereb_col].tolist(),
+                    mode="markers",
+                    name=subj,
+                    showlegend=(col_idx == 1),
+                    marker=dict(color=subject_color(subj), size=7, opacity=0.8,
+                                line=dict(width=0.5, color="white")),
+                    hovertemplate=(
+                        f"{subj}<br>{network} tSNR: %{{x:.1f}}<br>"
+                        f"Cereb tSNR: %{{y:.1f}}<extra></extra>"
+                    ),
+                ),
+                row=1, col=col_idx,
+            )
+        if col_idx == 1:
+            fig.update_yaxes(title_text="Cerebellar GM tSNR", row=1, col=1)
+        fig.update_xaxes(title_text="tSNR", row=1, col=col_idx)
+
+    fig.update_layout(
+        title=_fig_title("Cortex–Cerebellum tSNR: Yeo Network vs Cerebellar GM (session-level dots)"),
+        height=380,
+        legend_title="Subject",
+        margin=dict(t=80),
+    )
+    return fig
+
+
+def make_yeo_lobule_corr_matrix(
+    df_sessions: pd.DataFrame,
+    suit_label_names: List[str],
+    min_sessions: int = 5,
+) -> go.Figure:
+    """
+    Per-subject heatmap: Pearson r between each Yeo network and each SUIT lobule,
+    computed across sessions.
+
+    Rows = 7 Yeo networks, columns = SUIT lobules.
+    Only plotted for subjects with >= min_sessions sessions.
+
+    Note: correlations are across session-level tSNR means — they reflect
+    shared scan-quality fluctuation, not functional connectivity.
+    """
+    subjects = sorted(df_sessions["subject"].unique())
+
+    yeo_cols = [f"yeo_{n}" for n in YEO7_NAMES]
+    suit_cols = [f"suit_{n}" for n in suit_label_names]
+
+    # Filter to subjects with enough sessions and both Yeo + SUIT data
+    eligible = []
+    for subj in subjects:
+        sdf = df_sessions[df_sessions["subject"] == subj]
+        has_yeo = any(c in sdf.columns and sdf[c].notna().sum() >= min_sessions for c in yeo_cols)
+        has_suit = any(c in sdf.columns and sdf[c].notna().sum() >= min_sessions for c in suit_cols)
+        if has_yeo and has_suit and len(sdf) >= min_sessions:
+            eligible.append(subj)
+
+    if not eligible:
+        fig = go.Figure()
+        fig.update_layout(
+            title=_fig_title(f"Yeo–Lobule tSNR Correlation (need ≥{min_sessions} sessions)"),
+            height=200,
+        )
+        return fig
+
+    fig = make_subplots(
+        rows=1,
+        cols=len(eligible),
+        subplot_titles=eligible,
+        shared_yaxes=True,
+    )
+
+    for col_idx, subj in enumerate(eligible, start=1):
+        sdf = df_sessions[df_sessions["subject"] == subj]
+
+        # Build matrices: (n_sessions, n_networks) and (n_sessions, n_lobules)
+        yeo_avail = [c for c in yeo_cols if c in sdf.columns]
+        suit_avail = [c for c in suit_cols if c in sdf.columns]
+
+        yeo_mat = sdf[yeo_avail].values.astype(float)   # (n_ses, n_yeo)
+        suit_mat = sdf[suit_avail].values.astype(float)  # (n_ses, n_lobules)
+
+        # Drop rows where any column is NaN (correlation needs complete pairs)
+        valid_rows = np.isfinite(yeo_mat).all(axis=1) & np.isfinite(suit_mat).all(axis=1)
+        if valid_rows.sum() < min_sessions:
+            continue
+
+        yeo_mat = yeo_mat[valid_rows]
+        suit_mat = suit_mat[valid_rows]
+
+        # Compute cross-correlation: combine → full corrcoef → take cross block
+        combined = np.hstack([yeo_mat, suit_mat])       # (n_ses, n_yeo + n_lobules)
+        full_corr = np.corrcoef(combined.T)              # (n_yeo + n_lobules, n_yeo + n_lobules)
+        n_yeo = yeo_mat.shape[1]
+        cross_corr = full_corr[:n_yeo, n_yeo:]          # (n_yeo, n_lobules)
+
+        yeo_names_avail = [n for n, c in zip(YEO7_NAMES, yeo_cols) if c in sdf.columns]
+        suit_names_avail = [n.replace("suit_", "") for n in suit_avail]
+
+        fig.add_trace(
+            go.Heatmap(
+                z=cross_corr,
+                x=suit_names_avail,
+                y=yeo_names_avail,
+                colorscale="RdBu",
+                zmid=0,
+                zmin=-1,
+                zmax=1,
+                showscale=(col_idx == len(eligible)),
+                colorbar=dict(title="Pearson r", x=1.02) if col_idx == len(eligible) else None,
+                hovertemplate="Network: %{y}<br>Lobule: %{x}<br>r: %{z:.3f}<extra></extra>",
+            ),
+            row=1, col=col_idx,
+        )
+        if col_idx == 1:
+            fig.update_yaxes(title_text="Yeo Network", row=1, col=1)
+        fig.update_xaxes(tickangle=-45, row=1, col=col_idx)
+
+    fig.update_layout(
+        title=_fig_title(
+            "Yeo Network × SUIT Lobule tSNR Correlation (across sessions, per subject)\n"
+            "⚠ Reflects shared scan-quality fluctuation, not functional connectivity"
+        ),
+        height=380,
+        margin=dict(b=120, l=100),
+    )
+    return fig
+
+
 def make_usable_volumes_bar(df_runs: pd.DataFrame) -> go.Figure:
     """Per-subject bar chart of % usable volumes per session (mean over runs)."""
     subjects = sorted(df_runs["subject"].unique())

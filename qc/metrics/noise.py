@@ -448,15 +448,19 @@ def compute_interlobule_correlation(
     lobule_names:
         List of lobule names corresponding to matrix rows/columns.
     """
-    from qc.atlas import SUIT_LABEL_MAP, compute_lobule_timeseries
+    from qc.atlas import SUIT_LABEL_MAP, SUIT_DEEP_NUCLEI, compute_lobule_timeseries
 
-    lobule_ts_dict = compute_lobule_timeseries(bold_data, suit_data, SUIT_LABEL_MAP, mask_data)
-    lobule_names = list(SUIT_LABEL_MAP.values())
+    # Exclude deep nuclei: too few voxels at BOLD resolution → unreliable timeseries
+    cortex_label_map = {k: v for k, v in SUIT_LABEL_MAP.items() if v not in SUIT_DEEP_NUCLEI}
+
+    lobule_ts_dict = compute_lobule_timeseries(bold_data, suit_data, cortex_label_map, mask_data)
+    lobule_names = list(cortex_label_map.values())
 
     n = len(lobule_names)
     corr_matrix = np.full((n, n), np.nan, dtype=np.float32)
 
-    ts_list = [lobule_ts_dict[name] for name in lobule_names]
+    ts_list = [lobule_ts_dict[name] for name in lobule_names if name in lobule_ts_dict]
+    lobule_names = [n for n in lobule_names if n in lobule_ts_dict]
 
     for i in range(n):
         for j in range(i, n):
