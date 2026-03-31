@@ -149,10 +149,24 @@ def process_run(
     if aseg_data is not None and aseg_img is not None:
         aseg_resampled = _resample_atlas_to_bold(aseg_data, bold_img, aseg_img)
 
+    # Cerebellar grey matter mask: aseg labels 8 (L-Cereb-Cortex) + 47 (R-Cereb-Cortex),
+    # intersected with the brain mask. Used for SUIT lobule tSNR to exclude WM voxels.
+    gm_cereb_mask = None
+    if aseg_resampled is not None:
+        gm_cereb_mask = np.isin(aseg_resampled, [8, 47]).astype(np.uint8)
+        if mask_data is not None:
+            gm_cereb_mask = (gm_cereb_mask & mask_data.astype(bool)).astype(np.uint8)
+
     # --- tSNR ---
     try:
         tsnr_data, tsnr_img = compute_tsnr_map(bold_img, mask_img)
-        tsnr_metrics = extract_tsnr_by_roi(tsnr_data, suit_resampled, aseg_resampled, mask_data)
+        # SUIT lobule metrics use GM mask (cerebellar cortex only);
+        # aseg and whole-brain metrics keep the full brain mask.
+        tsnr_metrics = extract_tsnr_by_roi(
+            tsnr_data, suit_resampled, aseg_resampled,
+            suit_mask=gm_cereb_mask if gm_cereb_mask is not None else mask_data,
+            global_mask=mask_data,
+        )
         result.update(tsnr_metrics)
         result["_tsnr_img"] = tsnr_img
     except Exception as e:

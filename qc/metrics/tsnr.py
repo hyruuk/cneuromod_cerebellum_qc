@@ -71,13 +71,11 @@ def extract_tsnr_by_roi(
     tsnr_data: np.ndarray,
     suit_data: np.ndarray,
     aseg_data: Optional[np.ndarray],
-    mask_data: Optional[np.ndarray] = None,
+    suit_mask: Optional[np.ndarray] = None,
+    global_mask: Optional[np.ndarray] = None,
 ) -> Dict[str, float]:
     """
     Extract mean tSNR per SUIT lobule and aseg cerebellar/brainstem region.
-
-    Also computes whole-brain mean tSNR (over all in-mask non-NaN voxels) as
-    a normalisation reference.
 
     Parameters
     ----------
@@ -87,48 +85,61 @@ def extract_tsnr_by_roi(
         3D integer SUIT atlas array (0 = outside cerebellum).
     aseg_data:
         3D integer FreeSurfer aseg array, or None if unavailable.
-    mask_data:
-        3D brain mask (uint8 or bool).
+    suit_mask:
+        Mask applied to SUIT lobule extraction. Pass the cerebellar GM mask
+        (aseg labels 8+47) to restrict to grey matter only. Falls back to
+        global_mask if None.
+    global_mask:
+        Whole-brain binary mask (uint8 or bool). Used for aseg ROIs,
+        whole-brain mean, and cerebellar mean.
 
     Returns
     -------
     Dict with keys:
-        - 'suit_<lobule_name>': mean tSNR per SUIT lobule
-        - 'aseg_<region_name>': mean tSNR per aseg ROI
+        - 'suit_<lobule_name>': mean tSNR per SUIT lobule (GM-masked)
+        - 'aseg_<region_name>': mean tSNR per aseg ROI (brain-masked)
         - 'wholebrain_mean': mean tSNR across all valid in-mask voxels
-        - 'cereb_mean': mean tSNR in all cerebellar SUIT voxels combined
-        - 'cereb_wb_ratio': cereb_mean / wholebrain_mean
+        - 'cereb_gm_mean': mean tSNR in cerebellar GM (aseg 8+47) — NaN if unavailable
+        - 'cereb_mean': mean tSNR in all SUIT voxels combined (brain-masked)
+        - 'cereb_wb_ratio': cereb_gm_mean / wholebrain_mean
     """
     result: Dict[str, float] = {}
 
-    # SUIT lobule tSNR
-    suit_stats = extract_roi_stats(tsnr_data, suit_data, SUIT_LABEL_MAP, mask_data)
+    # SUIT lobule tSNR — use GM mask so only cortical voxels contribute
+    suit_stats = extract_roi_stats(tsnr_data, suit_data, SUIT_LABEL_MAP, suit_mask)
     for name, val in suit_stats.items():
         result[f"suit_{name}"] = val
 
-    # aseg ROI tSNR
+    # aseg ROI tSNR — use whole-brain mask
     if aseg_data is not None:
-        aseg_stats = extract_roi_stats(tsnr_data, aseg_data, ASEG_LABEL_MAP, mask_data)
+        aseg_stats = extract_roi_stats(tsnr_data, aseg_data, ASEG_LABEL_MAP, global_mask)
         for name, val in aseg_stats.items():
             result[f"aseg_{name}"] = val
 
-    # Whole-brain mean (over all non-NaN in-mask voxels)
-    if mask_data is not None:
-        valid_mask = mask_data.astype(bool) & np.isfinite(tsnr_data)
+    # Whole-brain mean (brain mask)
+    if global_mask is not None:
+        valid_mask = global_mask.astype(bool) & np.isfinite(tsnr_data)
     else:
         valid_mask = np.isfinite(tsnr_data)
     result["wholebrain_mean"] = float(np.nanmean(tsnr_data[valid_mask])) if valid_mask.any() else float("nan")
 
-    # Cerebellar mean (all SUIT voxels combined)
-    cereb_mask = (suit_data > 0)
-    if mask_data is not None:
-        cereb_mask = cereb_mask & mask_data.astype(bool)
+    # Cerebellar GM mean (aseg labels 8+47, GM mask)
+    if suit_mask is not None:
+        gm_vals = tsnr_data[suit_mask.astype(bool) & np.isfinite(tsnr_data)]
+        result["cereb_gm_mean"] = float(np.nanmean(gm_vals)) if len(gm_vals) > 0 else float("nan")
+    else:
+        result["cereb_gm_mean"] = float("nan")
+
+    # Cerebellar mean — all SUIT voxels, brain mask (for backward compatibility)
+    cereb_mask = suit_data > 0
+    if global_mask is not None:
+        cereb_mask = cereb_mask & global_mask.astype(bool)
     cereb_vals = tsnr_data[cereb_mask & np.isfinite(tsnr_data)]
     result["cereb_mean"] = float(np.nanmean(cereb_vals)) if len(cereb_vals) > 0 else float("nan")
 
-    # Ratio
+    # Ratio uses GM mean as the numerator (more meaningful than WM-diluted cereb_mean)
     wb = result["wholebrain_mean"]
-    cb = result["cereb_mean"]
+    cb = result["cereb_gm_mean"] if np.isfinite(result["cereb_gm_mean"]) else result["cereb_mean"]
     result["cereb_wb_ratio"] = (cb / wb) if (np.isfinite(wb) and wb > 0 and np.isfinite(cb)) else float("nan")
 
     return result

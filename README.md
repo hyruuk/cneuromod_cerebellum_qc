@@ -179,4 +179,4 @@ The SUIT Anatom parcellation (Diedrichsen 2009) labels 34 cerebellar regions:
 - **Cortical lobules (left / vermis / right):** I–IV, V, VI, CrusI, CrusII, VIIb, VIIIa, VIIIb, IX, X
 - **Deep nuclei (left / right):** Dentate, Interposed, Fastigial
 
-The atlas is provided in MNI space. fMRIPrep outputs use MNI152NLin2009cAsym; the template mismatch is sub-voxel for most of the cerebellum and acceptable for QC purposes. See `code_audit.md` for known limitations.
+The atlas is provided in MNI space. fMRIPrep outputs use MNI152NLin2009cAsym; the template mismatch is sub-voxel for most of the cerebellum and acceptable for QC purposes.

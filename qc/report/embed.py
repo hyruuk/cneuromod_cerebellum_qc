@@ -94,6 +94,7 @@ def tsnr_interactive_viewer(
     tsnr_img: nib.Nifti1Image,
     subject: str,
     threshold: float = 5.0,
+    vmax: Optional[float] = None,
     width: str = "100%",
     height: str = "500px",
 ) -> str:
@@ -121,7 +122,8 @@ def tsnr_interactive_viewer(
 
         tsnr_data = tsnr_img.get_fdata()
         valid = tsnr_data[np.isfinite(tsnr_data) & (tsnr_data > 0)]
-        vmax = float(np.percentile(valid, 97)) if len(valid) > 0 else 100.0
+        if vmax is None:
+            vmax = float(np.percentile(valid, 97)) if len(valid) > 0 else 100.0
 
         # Replace NaN with 0 so nilearn does not emit "Non-finite values detected".
         # Zeros fall below threshold and are rendered transparent.

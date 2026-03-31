@@ -193,13 +193,27 @@ def generate_html_report(
             atlas_interactive_viewer(atlas_img),
         ))
 
+    # Compute a global vmax across all subjects so colour scales are comparable
+    global_tsnr_vmax = None
+    if tsnr_imgs:
+        percentiles = []
+        for tsnr_img in tsnr_imgs.values():
+            if tsnr_img is None:
+                continue
+            d = tsnr_img.get_fdata()
+            valid = d[np.isfinite(d) & (d > 0)]
+            if len(valid) > 0:
+                percentiles.append(float(np.percentile(valid, 97)))
+        if percentiles:
+            global_tsnr_vmax = float(np.percentile(percentiles, 95))
+
     # Interactive 3D tSNR viewers (one per subject, nilearn view_img)
     if tsnr_imgs:
         viewer_html = ""
         for subj, tsnr_img in sorted(tsnr_imgs.items()):
             if tsnr_img is not None:
                 viewer_html += f"<h4>{subj}</h4>"
-                viewer_html += tsnr_interactive_viewer(tsnr_img, subj)
+                viewer_html += tsnr_interactive_viewer(tsnr_img, subj, vmax=global_tsnr_vmax)
         if viewer_html:
             s1_parts.append(_subsection(
                 "tSNR — Interactive 3D Viewer (click to navigate, hover for values)",
@@ -212,7 +226,7 @@ def generate_html_report(
         for subj, tsnr_img in sorted(tsnr_imgs.items()):
             if tsnr_img is not None:
                 slice_html += f"<h4>{subj}</h4>"
-                slice_html += tsnr_slices_to_html(tsnr_img, subj)
+                slice_html += tsnr_slices_to_html(tsnr_img, subj, vmax=global_tsnr_vmax)
         if slice_html:
             s1_parts.append(_subsection("tSNR Maps (cerebellar axial slices, z = -50 to -20 mm)", slice_html))
 
