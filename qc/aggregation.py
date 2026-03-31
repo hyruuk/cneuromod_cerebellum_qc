@@ -202,9 +202,14 @@ def process_run(
         else:
             result["_gm_display_mask"] = None
 
-        # Yeo network tSNR (cortical GM masked)
-        if yeo_resampled is not None and gm_cortex_mask is not None:
-            yeo_stats = extract_roi_stats(tsnr_data, yeo_resampled, YEO7_LABEL_MAP, gm_cortex_mask)
+        # Yeo network tSNR — use cortical GM mask when available, fall back to brain mask
+        if yeo_resampled is not None:
+            yeo_mask = (
+                gm_cortex_mask
+                if (gm_cortex_mask is not None and gm_cortex_mask.any())
+                else mask_data
+            )
+            yeo_stats = extract_roi_stats(tsnr_data, yeo_resampled, YEO7_LABEL_MAP, yeo_mask)
             for name, val in yeo_stats.items():
                 result[f"yeo_{name}"] = val
     except Exception as e:

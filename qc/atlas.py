@@ -282,7 +282,9 @@ def load_yeo_atlas(
     from nilearn.datasets import fetch_atlas_yeo_2011
 
     yeo = fetch_atlas_yeo_2011()
-    yeo_img = nib.load(yeo.thick_7)
+    # nilearn < 0.10 uses yeo.thick_7; nilearn >= 0.10 uses yeo.maps
+    atlas_path = getattr(yeo, "thick_7", None) or yeo.maps
+    yeo_img = nib.load(atlas_path)
     resampled = resample_to_img(yeo_img, reference_img, interpolation="nearest", copy_header=True)
     yeo_data = np.asarray(resampled.dataobj, dtype=np.int16)
     return yeo_data, YEO7_LABEL_MAP
